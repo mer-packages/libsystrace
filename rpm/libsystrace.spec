@@ -43,3 +43,6 @@ rm -rf %{buildroot}
 %{_libdir}/libsystrace.so
 %{_libdir}/pkgconfig/systrace.pc
 %{_includedir}/systrace.h
+
+%post -p /sbin/ldconfig
+%postun -p /sbin/ldconfig
