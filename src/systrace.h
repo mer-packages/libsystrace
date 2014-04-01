@@ -48,23 +48,23 @@ extern int systrace_should_trace(const char *module, const char *tracepoint);
 }
 #endif
 
-#define SYSTRACE_RECORD(module, what, tracepoint, message, ...) do { \
+#define SYSTRACE_RECORD(module, what, tracepoint, message) do { \
           if (systrace_should_trace(module, tracepoint)) { \
               pthread_mutex_lock(&systrace_trace_mutex); \
               if (what == 'B') \
-                 fprintf(systrace_trace_target, "B|%i|%s::%s" message "", \
-                    getpid(), tracepoint, module, ##__VA_ARGS__); \
+                 fprintf(systrace_trace_target, "B|%i|%s::%s%s", \
+                    getpid(), tracepoint, module, message); \
               else if (what == 'E') \
                  fprintf(systrace_trace_target, "E"); \
               else \
-                 fprintf(systrace_trace_target, "C|%i|%s::%s-%i|" message "", \
-                    getpid(), tracepoint, module, getpid(), ##__VA_ARGS__); \
+                 fprintf(systrace_trace_target, "C|%i|%s::%s-%i|%s", \
+                    getpid(), tracepoint, module, getpid(), message); \
               fflush(systrace_trace_target); \
               pthread_mutex_unlock(&systrace_trace_mutex); \
           } \
       } while(0)
-#define SYSTRACE_BEGIN(module, tracepoint, message, ...) SYSTRACE_RECORD(module, 'B', tracepoint, message, ##__VA_ARGS__)
-#define SYSTRACE_END(module, tracepoint, message, ...) SYSTRACE_RECORD(module, 'E', tracepoint, message, ##__VA_ARGS__)
-#define SYSTRACE_COUNTER(module, tracepoint, message, ...) SYSTRACE_RECORD(module, 'C', tracepoint, message, ##__VA_ARGS__)
+#define SYSTRACE_BEGIN(module, tracepoint, message) SYSTRACE_RECORD(module, 'B', tracepoint, message)
+#define SYSTRACE_END(module, tracepoint, message) SYSTRACE_RECORD(module, 'E', tracepoint, message)
+#define SYSTRACE_COUNTER(module, tracepoint, message) SYSTRACE_RECORD(module, 'C', tracepoint, message)
 
 #endif // SYSTRACE_H
