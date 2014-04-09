@@ -48,6 +48,14 @@ extern int systrace_should_trace(const char *module, const char *tracepoint);
 }
 #endif
 
+// begin and end (must nest)
+// B|pid|message
+// E
+//
+// async range:
+// S|pid|msg|cookie
+// F|pid|msg|cookie
+
 #define SYSTRACE_RECORD(module, what, tracepoint, message) do { \
           if (systrace_should_trace(module, tracepoint)) { \
               pthread_mutex_lock(&systrace_trace_mutex); \
@@ -66,5 +74,21 @@ extern int systrace_should_trace(const char *module, const char *tracepoint);
 #define SYSTRACE_BEGIN(module, tracepoint, message) SYSTRACE_RECORD(module, 'B', tracepoint, message)
 #define SYSTRACE_END(module, tracepoint, message) SYSTRACE_RECORD(module, 'E', tracepoint, message)
 #define SYSTRACE_COUNTER(module, tracepoint, message) SYSTRACE_RECORD(module, 'C', tracepoint, message)
+
+#define SYSTRACE_RECORD_ASYNC(module, what, tracepoint, cookie, message) do { \
+          if (systrace_should_trace(module, tracepoint)) { \
+              pthread_mutex_lock(&systrace_trace_mutex); \
+              if (what == 'S') \
+                 fprintf(systrace_trace_target, "S|%i|%s::%s%s|%p", \
+                    getpid(), tracepoint, module, message, cookie); \
+              else if (what == 'F') \
+                 fprintf(systrace_trace_target, "F|%i|%s::%s%s|%p", \
+                    getpid(), tracepoint, module, message, cookie); \
+              fflush(systrace_trace_target); \
+              pthread_mutex_unlock(&systrace_trace_mutex); \
+          } \
+      } while(0)
+#define SYSTRACE_ASYNC_BEGIN(module, tracepoint, cookie, message) SYSTRACE_RECORD_ASYNC(module, 'S', tracepoint, cookie, message)
+#define SYSTRACE_ASYNC_END(module, tracepoint, cookie, message) SYSTRACE_RECORD_ASYNC(module, 'F', tracepoint, cookie, message)
 
 #endif // SYSTRACE_H
