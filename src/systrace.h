@@ -42,6 +42,13 @@ extern "C"
 
 extern pthread_mutex_t systrace_trace_mutex;
 extern FILE *systrace_trace_target;
+
+/*!
+ * Determine whether or not libsystrace should trace a given \a module &
+ * \a tracepoint.
+ *
+ * Returns 1 if the parameters provided should be traced, 0 otherwise.
+ */
 extern int systrace_should_trace(const char *module, const char *tracepoint);
 
 #ifdef __cplusplus
@@ -56,6 +63,8 @@ extern int systrace_should_trace(const char *module, const char *tracepoint);
 // S|pid|msg|cookie
 // F|pid|msg|cookie
 
+/*! \internal
+ */
 #define SYSTRACE_RECORD(module, what, tracepoint, message) do { \
           if (systrace_should_trace(module, tracepoint)) { \
               pthread_mutex_lock(&systrace_trace_mutex); \
@@ -71,10 +80,49 @@ extern int systrace_should_trace(const char *module, const char *tracepoint);
               pthread_mutex_unlock(&systrace_trace_mutex); \
           } \
       } while(0)
+
+/*!
+ * Record the start of a duration event in a given \a module and \a tracepoint.
+ *
+ * Optionally use \a message to provide more context about the event.
+ *
+ * Duration events *must* be strictly nested (such as in a call stack, for
+ * example). If you wish to trace events that cannot be nested, see
+ * SYSTRACE_ASYNC_BEGIN.
+ *
+ * You must call SYSTRACE_END with the same parameters to end the event.
+ */
 #define SYSTRACE_BEGIN(module, tracepoint, message) SYSTRACE_RECORD(module, 'B', tracepoint, message)
+
+/*!
+ * Record the end of a duration event in a given \a module and \a tracepoint.
+ *
+ * Optionally use \a message to provide more context about the event.
+ *
+ * Duration events *must* be strictly nested (such as in a call stack, for
+ * example). If you wish to trace events that cannot be nested, see
+ * SYSTRACE_ASYNC_BEGIN.
+ *
+ * SYSTRACE_END must have been preceeded by a SYSTRACE_BEGIN call
+ * with the same parameters.
+ */
 #define SYSTRACE_END(module, tracepoint, message) SYSTRACE_RECORD(module, 'E', tracepoint, message)
+
+/*!
+ * Record a counter event for the given \a module and \a tracepoint.
+ *
+ * A counter is a method of recording the count of resources over execution. For
+ * instance, one might want to count the number of available free buffers when
+ * rendering graphics.
+ *
+ * In this particular case, \a tracepoint is most likely most useful to
+ * represent a variable rather than a code location, and 'message' should refer
+ * to a string buffer containing the number of items.
+ */
 #define SYSTRACE_COUNTER(module, tracepoint, message) SYSTRACE_RECORD(module, 'C', tracepoint, message)
 
+/*! \internal
+ */
 #define SYSTRACE_RECORD_ASYNC(module, what, tracepoint, cookie, message) do { \
           if (systrace_should_trace(module, tracepoint)) { \
               pthread_mutex_lock(&systrace_trace_mutex); \
@@ -88,7 +136,33 @@ extern int systrace_should_trace(const char *module, const char *tracepoint);
               pthread_mutex_unlock(&systrace_trace_mutex); \
           } \
       } while(0)
+
+/*!
+ * Record the start of an asynchronous event for the given \a module and \a tracepoint.
+ *
+ * An asynchronous event is an occurrence that is not necessarily nested like
+ * duration events, e.g. an ongoing network transfer.
+ *
+ * \a cookie is a pointer representing a unique instance for this
+ * asynchronous event.
+ *
+ * When the event completes, SYSTRACE_ASYNC_END must be invoked with the same
+ * parameters.
+ */
 #define SYSTRACE_ASYNC_BEGIN(module, tracepoint, cookie, message) SYSTRACE_RECORD_ASYNC(module, 'S', tracepoint, cookie, message)
+
+/*!
+ * Record the end of an asynchronous event for the given \a module and \a tracepoint.
+ *
+ * An asynchronous event is an occurrence that is not necessarily nested like
+ * duration events, e.g. an ongoing network transfer.
+ *
+ * \a cookie is a pointer representing a unique instance for this
+ * asynchronous event.
+ *
+ * SYSTRACE_ASYNC_END must have been preceeded at some point by a SYSTRACE_ASYNC_BEGIN call
+ * with the same parameters.
+ */
 #define SYSTRACE_ASYNC_END(module, tracepoint, cookie, message) SYSTRACE_RECORD_ASYNC(module, 'F', tracepoint, cookie, message)
 
 #endif // SYSTRACE_H
