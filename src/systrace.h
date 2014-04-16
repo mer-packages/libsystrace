@@ -40,9 +40,6 @@ extern "C"
 {
 #endif
 
-extern pthread_mutex_t systrace_trace_mutex;
-extern FILE *systrace_trace_target;
-
 /*!
  * Determine whether or not libsystrace should trace a given \a module &
  * \a tracepoint.
@@ -51,62 +48,32 @@ extern FILE *systrace_trace_target;
  */
 extern int systrace_should_trace(const char *module, const char *tracepoint);
 
-#ifdef __cplusplus
-}
-#endif
-
-// begin and end (must nest)
-// B|pid|message
-// E
-//
-// async range:
-// S|pid|msg|cookie
-// F|pid|msg|cookie
-
-/*! \internal
- */
-#define SYSTRACE_RECORD(module, what, tracepoint, message) do { \
-          if (systrace_should_trace(module, tracepoint)) { \
-              pthread_mutex_lock(&systrace_trace_mutex); \
-              if (what == 'B') \
-                 fprintf(systrace_trace_target, "B|%i|%s::%s%s", \
-                    getpid(), tracepoint, module, message); \
-              else if (what == 'E') \
-                 fprintf(systrace_trace_target, "E"); \
-              else \
-                 fprintf(systrace_trace_target, "C|%i|%s::%s-%i|%s", \
-                    getpid(), tracepoint, module, getpid(), message); \
-              fflush(systrace_trace_target); \
-              pthread_mutex_unlock(&systrace_trace_mutex); \
-          } \
-      } while(0)
-
 /*!
  * Record the start of a duration event in a given \a module and \a tracepoint.
  *
- * Optionally use \a message to provide more context about the event.
+ * Optionally use \a fmt to provide more context about the event.
  *
  * Duration events *must* be strictly nested (such as in a call stack, for
  * example). If you wish to trace events that cannot be nested, see
- * SYSTRACE_ASYNC_BEGIN.
+ * systrace_async_begin.
  *
- * You must call SYSTRACE_END with the same parameters to end the event.
+ * You must call systrace_duration_end with the same parameters to end the event.
  */
-#define SYSTRACE_BEGIN(module, tracepoint, message) SYSTRACE_RECORD(module, 'B', tracepoint, message)
+extern void systrace_duration_begin(const char *module, const char *tracepoint, const char *fmt, ...);
 
 /*!
  * Record the end of a duration event in a given \a module and \a tracepoint.
  *
- * Optionally use \a message to provide more context about the event.
+ * Optionally use \a fmt to provide more context about the event.
  *
  * Duration events *must* be strictly nested (such as in a call stack, for
  * example). If you wish to trace events that cannot be nested, see
- * SYSTRACE_ASYNC_BEGIN.
+ * systrace_async_begin.
  *
- * SYSTRACE_END must have been preceeded by a SYSTRACE_BEGIN call
+ * systrace_duration_end must have been preceeded by a systrace_duration_begin call
  * with the same parameters.
  */
-#define SYSTRACE_END(module, tracepoint, message) SYSTRACE_RECORD(module, 'E', tracepoint, message)
+extern void systrace_duration_end(const char *module, const char *tracepoint, const char *fmt, ...);
 
 /*!
  * Record a counter event for the given \a module and \a tracepoint.
@@ -119,23 +86,7 @@ extern int systrace_should_trace(const char *module, const char *tracepoint);
  * represent a variable rather than a code location, and 'message' should refer
  * to a string buffer containing the number of items.
  */
-#define SYSTRACE_COUNTER(module, tracepoint, message) SYSTRACE_RECORD(module, 'C', tracepoint, message)
-
-/*! \internal
- */
-#define SYSTRACE_RECORD_ASYNC(module, what, tracepoint, cookie, message) do { \
-          if (systrace_should_trace(module, tracepoint)) { \
-              pthread_mutex_lock(&systrace_trace_mutex); \
-              if (what == 'S') \
-                 fprintf(systrace_trace_target, "S|%i|%s::%s%s|%p", \
-                    getpid(), tracepoint, module, message, cookie); \
-              else if (what == 'F') \
-                 fprintf(systrace_trace_target, "F|%i|%s::%s%s|%p", \
-                    getpid(), tracepoint, module, message, cookie); \
-              fflush(systrace_trace_target); \
-              pthread_mutex_unlock(&systrace_trace_mutex); \
-          } \
-      } while(0)
+extern void systrace_record_counter(const char *module, const char *tracepoint, const char *fmt, ...);
 
 /*!
  * Record the start of an asynchronous event for the given \a module and \a tracepoint.
@@ -146,10 +97,10 @@ extern int systrace_should_trace(const char *module, const char *tracepoint);
  * \a cookie is a pointer representing a unique instance for this
  * asynchronous event.
  *
- * When the event completes, SYSTRACE_ASYNC_END must be invoked with the same
+ * When the event completes, systrace_async_end must be invoked with the same
  * parameters.
  */
-#define SYSTRACE_ASYNC_BEGIN(module, tracepoint, cookie, message) SYSTRACE_RECORD_ASYNC(module, 'S', tracepoint, cookie, message)
+extern void systrace_async_begin(const char *module, const char *tracepoint, void *cookie, const char *fmt, ...);
 
 /*!
  * Record the end of an asynchronous event for the given \a module and \a tracepoint.
@@ -160,9 +111,13 @@ extern int systrace_should_trace(const char *module, const char *tracepoint);
  * \a cookie is a pointer representing a unique instance for this
  * asynchronous event.
  *
- * SYSTRACE_ASYNC_END must have been preceeded at some point by a SYSTRACE_ASYNC_BEGIN call
- * with the same parameters.
+ * systrace_async_end must have been preceeded at some point by a
+ * systrace_async_begin call with the same parameters.
  */
-#define SYSTRACE_ASYNC_END(module, tracepoint, cookie, message) SYSTRACE_RECORD_ASYNC(module, 'F', tracepoint, cookie, message)
+extern void systrace_async_end(const char *module, const char *tracepoint, void *cookie, const char *fmt, ...);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // SYSTRACE_H

@@ -31,11 +31,12 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "systrace.h"
 
-pthread_mutex_t systrace_trace_mutex;
-FILE *systrace_trace_target;
+static pthread_mutex_t systrace_trace_mutex;
+static FILE *systrace_trace_target;
 
 __attribute__((constructor)) void systrace_init()
 {
@@ -69,5 +70,97 @@ int systrace_should_trace(const char *module, const char *tracepoint)
 
     /* TODO: caching of areas would prevent constant rescanning, if we care. */
     return strstr(systrace_areas, module) != NULL;
+}
+
+// begin and end (must nest)
+// B|pid|message
+// E
+//
+// async range:
+// S|pid|msg|cookie
+// F|pid|msg|cookie
+
+/*! \internal
+ */
+#define SYSTRACE_RECORD(module, what, tracepoint, buffer) do { \
+          if (systrace_should_trace(module, tracepoint)) { \
+              pthread_mutex_lock(&systrace_trace_mutex); \
+              if (what == 'B') \
+                 fprintf(systrace_trace_target, "B|%i|%s::%s%s", \
+                    getpid(), tracepoint, module, buffer); \
+              else if (what == 'E') \
+                 fprintf(systrace_trace_target, "E"); \
+              else \
+                 fprintf(systrace_trace_target, "C|%i|%s::%s-%i|%s", \
+                    getpid(), tracepoint, module, getpid(), buffer); \
+              fflush(systrace_trace_target); \
+              pthread_mutex_unlock(&systrace_trace_mutex); \
+          } \
+      } while(0)
+
+void systrace_duration_begin(const char *module, const char *tracepoint, const char *fmt, ...)
+{
+    char buffer[1024];
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(buffer, fmt, args);
+    va_end(args);
+    SYSTRACE_RECORD(module, 'B', tracepoint, buffer);
+}
+
+void systrace_duration_end(const char *module, const char *tracepoint, const char *fmt, ...)
+{
+    char buffer[1024];
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(buffer, fmt, args);
+    va_end(args);
+    SYSTRACE_RECORD(module, 'E', tracepoint, buffer);
+}
+
+void systrace_record_counter(const char *module, const char *tracepoint, const char *fmt, ...)
+{
+    char buffer[1024];
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(buffer, fmt, args);
+    va_end(args);
+    SYSTRACE_RECORD(module, 'C', tracepoint, buffer);
+}
+
+/*! \internal
+ */
+#define SYSTRACE_RECORD_ASYNC(module, what, tracepoint, cookie, message) do { \
+          if (systrace_should_trace(module, tracepoint)) { \
+              pthread_mutex_lock(&systrace_trace_mutex); \
+              if (what == 'S') \
+                 fprintf(systrace_trace_target, "S|%i|%s::%s%s|%p", \
+                    getpid(), tracepoint, module, message, cookie); \
+              else if (what == 'F') \
+                 fprintf(systrace_trace_target, "F|%i|%s::%s%s|%p", \
+                    getpid(), tracepoint, module, message, cookie); \
+              fflush(systrace_trace_target); \
+              pthread_mutex_unlock(&systrace_trace_mutex); \
+          } \
+      } while(0)
+
+void systrace_async_begin(const char *module, const char *tracepoint, void *cookie, const char *fmt, ...)
+{
+    char buffer[1024];
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(buffer, fmt, args);
+    va_end(args);
+    SYSTRACE_RECORD_ASYNC(module, 'S', tracepoint, cookie, buffer);
+}
+
+void systrace_async_end(const char *module, const char *tracepoint, void *cookie, const char *fmt, ...)
+{
+    char buffer[1024];
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(buffer, fmt, args);
+    va_end(args);
+    SYSTRACE_RECORD_ASYNC(module, 'F', tracepoint, cookie, buffer);
 }
 
