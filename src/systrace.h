@@ -30,6 +30,7 @@
  */
 
 #ifndef SYSTRACE_H
+#define SYSTRACE_H
 
 #include <pthread.h>
 #include <stdio.h>
